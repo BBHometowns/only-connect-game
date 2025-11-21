@@ -901,7 +901,7 @@
 
     <script>
         // Socket.IO connection
-        const socket = io();
+        const socket = io(window.location.origin);
 
         // Game data
         const gameData = {
