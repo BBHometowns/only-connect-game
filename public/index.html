@@ -1,0 +1,2355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Only Connect Trivia Game - Multiplayer</title>
+    <script src="/socket.io/socket.io.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            min-height: 100vh;
+            background: linear-gradient(to bottom right, #1e3a8a, #6b21a8, #1e3a8a);
+            padding: 2rem;
+        }
+
+        .game-container {
+            max-width: 64rem;
+            margin: 0 auto;
+        }
+
+        .header-card {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(12px);
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-title { 
+            font-size: 1.875rem; 
+            font-weight: bold; 
+            color: white;
+        }
+
+        .score-box {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(12px);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 0.5rem;
+            padding: 1rem 1.5rem;
+            min-width: 150px;
+            text-align: center;
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.4), 
+                        inset 0 2px 0 rgba(255, 255, 255, 0.3),
+                        inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .score-value {
+            color: white;
+            font-size: 3rem;
+            font-weight: bold;
+            line-height: 1;
+        }
+
+        .round-selector {
+            display: grid;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .round-btn {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(12px);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            color: white;
+            font-size: 1.25rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: left;
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.4), 
+                        inset 0 2px 0 rgba(255, 255, 255, 0.3),
+                        inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .round-btn:hover {
+            background: rgba(255, 255, 255, 0.25);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.5), 
+                        inset 0 2px 0 rgba(255, 255, 255, 0.3),
+                        inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .round-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4), 
+                        inset 0 1px 0 rgba(255, 255, 255, 0.2),
+                        inset 0 -2px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .round-btn.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .round-title {
+            font-size: 0.875rem;
+            opacity: 0.8;
+            margin-bottom: 0.25rem;
+        }
+
+        .question-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(2, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .question-btn {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(12px);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 0.5rem;
+            padding: 2rem;
+            color: white;
+            font-size: 1.5rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            min-height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.4), 
+                        inset 0 2px 0 rgba(255, 255, 255, 0.3),
+                        inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .question-btn:hover {
+            background: rgba(255, 255, 255, 0.25);
+            transform: scale(1.05);
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.5), 
+                        inset 0 2px 0 rgba(255, 255, 255, 0.3),
+                        inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .question-btn:active {
+            transform: scale(1);
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4), 
+                        inset 0 1px 0 rgba(255, 255, 255, 0.2),
+                        inset 0 -2px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .question-btn.completed {
+            background: rgba(100, 100, 120, 0.4);
+            border-color: rgba(100, 100, 120, 0.6);
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .question-btn.completed:hover {
+            transform: none;
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.4), 
+                        inset 0 2px 0 rgba(255, 255, 255, 0.3),
+                        inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .question-btn.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .clue-container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(12px);
+            border-radius: 0.5rem;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .buttons-container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(12px);
+            border-radius: 0.5rem;
+            padding: 2rem;
+            margin-bottom: 1.5rem;
+            height: 90px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .timer-bar-container {
+            height: 30px;
+            background: #7f1d1d;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            margin-bottom: 0.5rem;
+            position: relative;
+            box-shadow: 0 5px 8px rgba(0, 0, 0, 0.4), 
+                        inset 0 3px 0 rgba(0, 0, 0, 0.4),
+                        inset 0 -2px 0 rgba(255, 255, 255, 0.2);
+        }
+
+        .timer-bar {
+            height: 100%;
+            background: #d1d5db;
+            transition: width 0.1s linear;
+            margin-left: auto;
+            border-radius: 0;
+        }
+
+        .timer-text {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-weight: bold;
+            font-size: 0.875rem;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        .points-label {
+            color: white;
+            font-weight: bold;
+            font-size: 1rem;
+            text-align: center;
+            margin-bottom: 0.25rem;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        .clue-wrapper {
+            display: flex;
+            flex-direction: column;
+            min-height: 160px;
+        }
+
+        .timer-spacer {
+            height: 60px;
+            margin-bottom: 0rem;
+        }
+
+        .clue-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .clue-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            border-radius: 0.5rem;
+            padding: 2rem 1rem;
+            color: white;
+            font-size: 1.25rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            min-height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.4), 
+                        inset 0 2px 0 rgba(255, 255, 255, 0.3),
+                        inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .clue-btn:hover:not(.revealed):not(.disabled) {
+            background: rgba(255, 255, 255, 0.3);
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.5), 
+                        inset 0 2px 0 rgba(255, 255, 255, 0.3),
+                        inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .clue-btn:active:not(.revealed):not(.disabled) {
+            transform: translateY(2px);
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4), 
+                        inset 0 1px 0 rgba(255, 255, 255, 0.2),
+                        inset 0 -2px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .clue-btn.revealed {
+            background: rgba(59, 130, 246, 0.4);
+            border-color: #3b82f6;
+            cursor: default;
+        }
+
+        .clue-btn.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .answer-box {
+            background: rgba(255, 255, 255, 0.15);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            color: white;
+            height: 80px;
+            text-align: center;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 1.5rem;
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.4), 
+                        inset 0 2px 0 rgba(255, 255, 255, 0.3),
+                        inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .button-row {
+            display: flex;
+            gap: 1rem;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 0.75rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 1rem;
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.4), 
+                        inset 0 2px 0 rgba(255, 255, 255, 0.3),
+                        inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .btn:active {
+            transform: translateY(2px);
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4), 
+                        inset 0 1px 0 rgba(255, 255, 255, 0.2),
+                        inset 0 -2px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .btn.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .btn-correct {
+            background: #22c55e;
+            color: white;
+        }
+
+        .btn-correct:hover:not(.disabled) {
+            background: #16a34a;
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.5), 
+                        inset 0 2px 0 rgba(255, 255, 255, 0.3),
+                        inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .btn-incorrect {
+            background: #ef4444;
+            color: white;
+        }
+
+        .btn-incorrect:hover:not(.disabled) {
+            background: #dc2626;
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.5), 
+                        inset 0 2px 0 rgba(255, 255, 255, 0.3),
+                        inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .btn-primary {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .btn-primary:hover:not(.disabled) {
+            background: #2563eb;
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.5), 
+                        inset 0 2px 0 rgba(255, 255, 255, 0.3),
+                        inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .back-btn {
+            background: rgba(255, 255, 255, 0.15);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-weight: bold;
+            margin-bottom: 1.5rem;
+            transition: all 0.2s;
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.4), 
+                        inset 0 2px 0 rgba(255, 255, 255, 0.3),
+                        inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .back-btn:hover:not(.disabled) {
+            background: rgba(255, 255, 255, 0.25);
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.5), 
+                        inset 0 2px 0 rgba(255, 255, 255, 0.3),
+                        inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .back-btn:active:not(.disabled) {
+            transform: translateY(2px);
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4), 
+                        inset 0 1px 0 rgba(255, 255, 255, 0.2),
+                        inset 0 -2px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .back-btn.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        /* Connecting Wall Styles */
+        .wall-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+            position: relative;
+            min-height: 440px;
+        }
+
+        .wall-tile {
+            background: rgba(30, 30, 30, 0.9);
+            backdrop-filter: blur(12px);
+            border: 2px solid rgba(80, 80, 80, 1);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            color: white;
+            font-size: 1.125rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: top 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94), 
+                        left 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                        background 0.3s ease,
+                        border-color 0.3s ease,
+                        transform 0.2s ease,
+                        align-items 0.3s ease,
+                        padding-top 0.3s ease;
+            min-height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.4), 
+                        inset 0 2px 0 rgba(255, 255, 255, 0.3),
+                        inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+            position: absolute;
+        }
+
+        .wall-tile.text-up {
+            align-items: flex-start;
+            padding-top: 1.5rem;
+        }
+
+        .wall-tile:hover:not(.solved):not(.locked):not(.disabled) {
+            transform: scale(1.05);
+        }
+
+        .wall-tile.selected {
+            background: rgba(59, 130, 246, 0.6);
+            border-color: rgba(59, 130, 246, 0.9);
+            transform: scale(1.05);
+        }
+
+        .wall-tile.solved {
+            cursor: default;
+            pointer-events: none;
+        }
+
+        .wall-tile.locked {
+            cursor: not-allowed;
+        }
+
+        .wall-tile.hidden-text {
+            color: transparent;
+        }
+
+        .wall-tile.disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .wall-tile.group-0 {
+            background: rgba(250, 204, 21, 0.55);
+            border-color: rgba(250, 204, 21, 0.95);
+        }
+
+        .wall-tile.group-1 {
+            background: rgba(34, 197, 94, 0.55);
+            border-color: rgba(34, 197, 94, 0.95);
+        }
+
+        .wall-tile.group-2 {
+            background: rgba(59, 130, 246, 0.55);
+            border-color: rgba(59, 130, 246, 0.95);
+        }
+
+        .wall-tile.group-3 {
+            background: rgba(168, 85, 247, 0.55);
+            border-color: rgba(168, 85, 247, 0.95);
+        }
+
+        .connection-display {
+            position: absolute;
+            left: 0;
+            background: rgba(0, 0, 0, 0.9);
+            backdrop-filter: blur(8px);
+            border: 2px solid rgba(255, 255, 255, 0.5);
+            border-radius: 0.5rem;
+            padding: 0.5rem;
+            text-align: center;
+            color: white;
+            font-size: 0.875rem;
+            font-weight: bold;
+            z-index: 10;
+            width: calc(100% - 4px);
+            height: 45px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+        }
+
+        .connection-display.fade-in {
+            animation: fadeIn 1s ease forwards;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+            }
+            to {
+                opacity: 1;
+            }
+        }
+
+        .time-up-modal, .wall-frozen-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .time-up-content, .wall-frozen-content {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(12px);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 0.5rem;
+            padding: 3rem;
+            text-align: center;
+            color: white;
+        }
+
+        .time-up-title, .wall-frozen-title {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 2rem;
+        }
+
+        .guess-btn {
+            width: 45px;
+            height: 45px;
+            border-radius: 0.5rem;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            font-size: 1.25rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.4), 
+                        inset 0 2px 0 rgba(255, 255, 255, 0.3),
+                        inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .guess-btn.correct {
+            background: rgba(34, 197, 94, 0.5);
+            border-color: rgba(34, 197, 94, 0.8);
+            color: white;
+        }
+
+        .guess-btn.incorrect {
+            background: rgba(239, 68, 68, 0.5);
+            border-color: rgba(239, 68, 68, 0.8);
+            color: white;
+        }
+
+        .guess-btn:hover:not(.disabled) {
+            transform: scale(1.1);
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.5), 
+                        inset 0 2px 0 rgba(255, 255, 255, 0.3),
+                        inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .guess-btn.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .wall-timer-container {
+            margin-top: 1rem;
+            transition: opacity 0.5s ease;
+        }
+
+        .wall-timer-container.fade-out {
+            opacity: 0;
+        }
+
+        .wall-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .lives-display {
+            color: white;
+            font-size: 1.125rem;
+            font-weight: bold;
+        }
+
+        /* Missing Vowels Styles */
+        .vowels-category-box {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(12px);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 0.5rem;
+            padding: 1rem;
+            color: white;
+            text-align: center;
+            margin-bottom: 1.5rem;
+            min-height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.25rem;
+            font-weight: bold;
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.4), 
+                        inset 0 2px 0 rgba(255, 255, 255, 0.3),
+                        inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .vowels-category-box:hover:not(.disabled) {
+            background: rgba(255, 255, 255, 0.25);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.5), 
+                        inset 0 2px 0 rgba(255, 255, 255, 0.3),
+                        inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .vowels-category-box.disabled {
+            cursor: not-allowed;
+        }
+
+        .vowels-category-box.disabled:hover {
+            transform: none;
+            background: rgba(255, 255, 255, 0.15);
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.4), 
+                        inset 0 2px 0 rgba(255, 255, 255, 0.3),
+                        inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .vowels-clue-box {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(12px);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 0.5rem;
+            padding: 3rem;
+            color: white;
+            text-align: center;
+            margin-bottom: 1.5rem;
+            min-height: 160px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: bold;
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.4), 
+                        inset 0 2px 0 rgba(255, 255, 255, 0.3),
+                        inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .vowels-clue-text {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            align-items: center;
+            gap: 0.3em;
+        }
+
+        .vowels-letter {
+            display: inline-block;
+            transition: all 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        .vowels-letter.spread {
+            letter-spacing: 0.15em;
+        }
+
+        .vowels-letter.vowel {
+            opacity: 0;
+            transform: scale(0);
+        }
+
+        .vowels-letter.vowel.revealed {
+            opacity: 1;
+            transform: scale(1);
+        }
+
+        /* Final Score Screen */
+        .final-score-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 60vh;
+        }
+
+        .final-score-names {
+            color: white;
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 2rem;
+            text-align: center;
+        }
+
+        .final-score-box {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(12px);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 0.5rem;
+            padding: 3rem 5rem;
+            text-align: center;
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.4), 
+                        inset 0 2px 0 rgba(255, 255, 255, 0.3),
+                        inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .final-score-value {
+            color: white;
+            font-size: 6rem;
+            font-weight: bold;
+            line-height: 1;
+        }
+
+        .end-session-btn {
+            margin-top: 2rem;
+            background: rgba(255, 255, 255, 0.15);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 1rem 3rem;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1.25rem;
+            transition: all 0.2s;
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.4), 
+                        inset 0 2px 0 rgba(255, 255, 255, 0.3),
+                        inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .end-session-btn:hover:not(.disabled) {
+            background: rgba(255, 255, 255, 0.25);
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.5), 
+                        inset 0 2px 0 rgba(255, 255, 255, 0.3),
+                        inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .end-session-btn:active:not(.disabled) {
+            transform: translateY(2px);
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4), 
+                        inset 0 1px 0 rgba(255, 255, 255, 0.2),
+                        inset 0 -2px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .end-session-btn.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        /* Setup Modal */
+        .setup-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .setup-modal-content {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(12px);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 0.5rem;
+            padding: 3rem;
+            text-align: center;
+            color: white;
+            min-width: 400px;
+        }
+
+        .setup-modal-title {
+            font-size: 2rem;
+            font-weight: bold;
+            margin-bottom: 2rem;
+        }
+
+        .setup-input {
+            width: 100%;
+            padding: 1rem;
+            font-size: 1.25rem;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 0.5rem;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            margin-bottom: 1.5rem;
+            outline: none;
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.4), 
+                        inset 0 2px 0 rgba(0, 0, 0, 0.3);
+            text-align: center;
+        }
+
+        .setup-input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .setup-input:focus {
+            border-color: rgba(255, 255, 255, 0.5);
+            background: rgba(255, 255, 255, 0.15);
+        }
+
+        .setup-btn {
+            background: #3b82f6;
+            color: white;
+            padding: 1rem 2rem;
+            border: none;
+            border-radius: 0.5rem;
+            font-weight: bold;
+            font-size: 1.25rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 6px 10px rgba(0, 0, 0, 0.4), 
+                        inset 0 2px 0 rgba(255, 255, 255, 0.3),
+                        inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+            width: 100%;
+            margin-bottom: 0.5rem;
+        }
+
+        .setup-btn:hover {
+            background: #2563eb;
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.5), 
+                        inset 0 2px 0 rgba(255, 255, 255, 0.3),
+                        inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .setup-btn:active {
+            transform: translateY(2px);
+            box-shadow: 0 3px 6px rgba(0, 0, 0, 0.4), 
+                        inset 0 1px 0 rgba(255, 255, 255, 0.2),
+                        inset 0 -2px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .error-message {
+            color: #ef4444;
+            font-size: 0.875rem;
+            margin-top: 0.5rem;
+            min-height: 1.5rem;
+        }
+
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+    <div id="gameContainer"></div>
+
+    <script>
+        // Socket.IO connection
+        const socket = io();
+
+        // Game data
+        const gameData = {
+            round1: [
+                { clues: ["Mercury", "Venus", "Earth", "Mars"], connection: "Rocky planets in our solar system", points: [5, 3, 2, 1] },
+                { clues: ["Pride", "Envy", "Wrath", "Sloth"], connection: "Seven deadly sins", points: [5, 3, 2, 1] },
+                { clues: ["John", "Paul", "George", "Ringo"], connection: "Members of The Beatles", points: [5, 3, 2, 1] },
+                { clues: ["Spring", "Summer", "Autumn", "Winter"], connection: "Four seasons", points: [5, 3, 2, 1] },
+                { clues: ["Diamond", "Ruby", "Emerald", "Sapphire"], connection: "Precious gemstones", points: [5, 3, 2, 1] },
+                { clues: ["North", "South", "East", "West"], connection: "Cardinal directions", points: [5, 3, 2, 1] }
+            ],
+            round2: [
+                { clues: ["1st", "2nd", "3rd", "4th"], answer: "4th", sequence: "Ordinal numbers", points: [5, 3, 2] },
+                { clues: ["Bronze", "Silver", "Gold", "Platinum"], answer: "Platinum", sequence: "Record certification levels", points: [5, 3, 2] },
+                { clues: ["A", "E", "I", "O"], answer: "O", sequence: "Vowels in alphabetical order", points: [5, 3, 2] },
+                { clues: ["Washington", "Adams", "Jefferson", "Madison"], answer: "Madison", sequence: "US Presidents in order", points: [5, 3, 2] },
+                { clues: ["90°", "180°", "270°", "360°"], answer: "360°", sequence: "Quarter rotations", points: [5, 3, 2] },
+                { clues: ["New Moon", "First Quarter", "Full Moon", "Last Quarter"], answer: "Last Quarter", sequence: "Phases of the moon", points: [5, 3, 2] }
+            ],
+            round3: [
+                {
+                    groups: [
+                        { items: ["Bark", "Trunk", "Branch", "Root"], connection: "Parts of a tree" },
+                        { items: ["Jupiter", "Saturn", "Uranus", "Neptune"], connection: "Gas giant planets" },
+                        { items: ["Red", "Blue", "Green", "Yellow"], connection: "Primary and secondary colors" },
+                        { items: ["Apple", "Microsoft", "Amazon", "Google"], connection: "Tech companies" }
+                    ]
+                }
+            ],
+            round4: [
+                {
+                    category: "Types of Cheese",
+                    clues: [
+                        { withoutVowels: "CHDR", answer: "CHEDDAR" },
+                        { withoutVowels: "MZZRLL", answer: "MOZZARELLA" },
+                        { withoutVowels: "PRMSN", answer: "PARMESAN" },
+                        { withoutVowels: "BR", answer: "BRIE" }
+                    ]
+                },
+                {
+                    category: "World Capitals",
+                    clues: [
+                        { withoutVowels: "PRS", answer: "PARIS" },
+                        { withoutVowels: "TKY", answer: "TOKYO" },
+                        { withoutVowels: "LDN", answer: "LONDON" },
+                        { withoutVowels: "RM", answer: "ROME" }
+                    ]
+                },
+                {
+                    category: "Famous Scientists",
+                    clues: [
+                        { withoutVowels: "NSTN", answer: "EINSTEIN" },
+                        { withoutVowels: "NWTN", answer: "NEWTON" },
+                        { withoutVowels: "DRWN", answer: "DARWIN" },
+                        { withoutVowels: "CR", answer: "CURIE" }
+                    ]
+                }
+            ]
+        };
+
+        // Game state
+        let myRole = null; // 'host' or 'player1', 'player2', etc.
+        let gameCode = null;
+        let playerNames = '';
+        let allPlayers = []; // Array of all player names
+        let showSetupModal = true;
+        let setupStep = 'initial'; // 'initial', 'createGame', 'joinGame', 'enterName'
+        let score = 0;
+        let view = 'rounds';
+        let currentRound = null;
+        let currentQuestion = null;
+        let cluesRevealed = 0;
+        let answerRevealed = false;
+        let completedQuestions = [];
+        let timerStartTime = null;
+        let timerInterval = null;
+        let timerDuration = 60000;
+        let timerElapsedWhenStopped = 0;
+        let timerStopped = false;
+        let timerStoppedOnClue = null;
+
+        // Round 3 (Connecting Wall) state
+        let wallTiles = [];
+        let selectedTiles = [];
+        let solvedGroups = [];
+        let wallLives = 3;
+        let wallLocked = false;
+        let wallTimerStarted = false;
+        let wallPhase = 'solving';
+        let connectionGuesses = [];
+        let wallTimerReady = false;
+        let showTimeUpModal = false;
+        let showWallFrozenModal = false;
+
+        // Round 4 (Missing Vowels) state
+        let vowelsCurrentCategory = 0;
+        let vowelsCurrentClue = 0;
+        let vowelsCategoryRevealed = false;
+        let vowelsCategoryAnimating = false;
+        let vowelsClueRevealed = false;
+        let vowelsAnswerRevealed = false;
+        let vowelsShowTimeUpModal = false;
+
+        // Socket event listeners
+        socket.on('gameCreated', ({ gameCode: code, role }) => {
+            gameCode = code;
+            myRole = role;
+            showSetupModal = false;
+            render();
+        });
+
+        socket.on('gameJoined', ({ gameCode: code, role, playerName }) => {
+            gameCode = code;
+            myRole = role;
+            playerNames = playerName;
+            showSetupModal = false;
+            render();
+        });
+
+        socket.on('gameCodeExists', () => {
+            alert('Game code already exists. Please choose another.');
+        });
+
+        socket.on('gameNotFound', () => {
+            alert('Game not found. Please check the code.');
+        });
+
+        socket.on('playersUpdated', ({ players }) => {
+            allPlayers = players;
+            updatePlayerNamesDisplay();
+            render();
+        });
+
+        socket.on('syncGameState', (gameState) => {
+            // Sync state from host
+            score = gameState.score;
+            view = gameState.view;
+            currentRound = gameState.currentRound;
+            currentQuestion = gameState.currentQuestion;
+            cluesRevealed = gameState.cluesRevealed;
+            answerRevealed = gameState.answerRevealed;
+            completedQuestions = gameState.completedQuestions;
+            timerStopped = gameState.timerStopped;
+            timerElapsedWhenStopped = gameState.timerElapsedWhenStopped;
+            
+            // Round 3 state
+            wallTiles = gameState.wallTiles;
+            selectedTiles = gameState.selectedTiles;
+            solvedGroups = gameState.solvedGroups;
+            wallLives = gameState.wallLives;
+            wallPhase = gameState.wallPhase;
+            connectionGuesses = gameState.connectionGuesses;
+            wallTimerReady = gameState.wallTimerReady;
+            showTimeUpModal = gameState.showTimeUpModal;
+            showWallFrozenModal = gameState.showWallFrozenModal;
+            
+            // Round 4 state
+            vowelsCurrentCategory = gameState.vowelsCurrentCategory;
+            vowelsCurrentClue = gameState.vowelsCurrentClue;
+            vowelsCategoryRevealed = gameState.vowelsCategoryRevealed;
+            vowelsCategoryAnimating = gameState.vowelsCategoryAnimating;
+            vowelsClueRevealed = gameState.vowelsClueRevealed;
+            vowelsAnswerRevealed = gameState.vowelsAnswerRevealed;
+            vowelsShowTimeUpModal = gameState.vowelsShowTimeUpModal;
+            
+            render();
+        });
+
+        socket.on('playerBuzzed', ({ playerName }) => {
+            if (myRole === 'host') {
+                // Stop timer when player buzzes
+                stopTimer();
+            }
+        });
+
+        socket.on('gameAction', (action) => {
+            // Execute action from host
+            if (typeof window[action.type] === 'function') {
+                window[action.type].apply(null, action.params || []);
+            }
+        });
+
+        socket.on('wallAction', ({ action }) => {
+            // Handle wall actions from players (only host processes these)
+            if (myRole === 'host' && action.type === 'toggleTile') {
+                toggleTile(action.index);
+            }
+        });
+
+        socket.on('hostDisconnected', () => {
+            alert('Host disconnected. Game session ended.');
+            location.reload();
+        });
+
+        // Helper functions
+        function isHost() {
+            return myRole === 'host';
+        }
+
+        function isPlayer() {
+            return myRole && myRole.startsWith('player');
+        }
+
+        function syncGameState() {
+            if (!isHost()) return;
+            
+            socket.emit('syncState', {
+                score,
+                view,
+                currentRound,
+                currentQuestion,
+                cluesRevealed,
+                answerRevealed,
+                completedQuestions,
+                timerStopped,
+                timerElapsedWhenStopped,
+                wallTiles,
+                selectedTiles,
+                solvedGroups,
+                wallLives,
+                wallPhase,
+                connectionGuesses,
+                wallTimerReady,
+                showTimeUpModal,
+                showWallFrozenModal,
+                vowelsCurrentCategory,
+                vowelsCurrentClue,
+                vowelsCategoryRevealed,
+                vowelsCategoryAnimating,
+                vowelsClueRevealed,
+                vowelsAnswerRevealed,
+                vowelsShowTimeUpModal
+            });
+        }
+
+        function broadcastAction(type, params = []) {
+            if (!isHost()) return;
+            socket.emit('hostAction', { type, params });
+        }
+
+        function updatePlayerNamesDisplay() {
+            if (isHost()) {
+                if (allPlayers.length === 0) {
+                    playerNames = "Waiting for players...";
+                } else if (allPlayers.length === 1) {
+                    playerNames = allPlayers[0].name;
+                } else if (allPlayers.length === 2) {
+                    playerNames = allPlayers[0].name + " & " + allPlayers[1].name;
+                } else {
+                    const lastPlayer = allPlayers[allPlayers.length - 1].name;
+                    const otherPlayers = allPlayers.slice(0, -1).map(p => p.name).join(", ");
+                    playerNames = otherPlayers + ", & " + lastPlayer;
+                }
+            }
+        }
+
+        // Timer functions
+        function startTimer() {
+            if (timerStartTime === null) {
+                timerStartTime = Date.now();
+                timerInterval = setInterval(updateTimer, 100);
+            }
+        }
+
+        function updateTimer() {
+            if (timerStopped) {
+                const remaining = Math.max(0, timerDuration - timerElapsedWhenStopped);
+                const percentage = (remaining / timerDuration) * 100;
+                const timerBar = document.getElementById('timerBar');
+                const timerText = document.getElementById('timerText');
+                if (timerBar) timerBar.style.width = percentage + '%';
+                if (timerText) timerText.textContent = Math.ceil(remaining / 1000) + 's';
+                return;
+            }
+            
+            const elapsed = Date.now() - timerStartTime;
+            const remaining = Math.max(0, timerDuration - elapsed);
+            const percentage = (remaining / timerDuration) * 100;
+            const timerBar = document.getElementById('timerBar');
+            const timerText = document.getElementById('timerText');
+            if (timerBar) timerBar.style.width = percentage + '%';
+            if (timerText) timerText.textContent = Math.ceil(remaining / 1000) + 's';
+            
+            if (remaining === 0) {
+                stopTimer();
+                
+                if (view === 'wall' && wallPhase === 'solving') {
+                    showTimeUpModal = true;
+                    syncGameState();
+                    render();
+                } else if (view === 'vowels' && vowelsCategoryRevealed) {
+                    vowelsShowTimeUpModal = true;
+                    syncGameState();
+                    render();
+                }
+            }
+        }
+
+        function stopTimer() {
+            if (timerInterval) {
+                if (!timerStopped && timerStartTime !== null) {
+                    timerElapsedWhenStopped = Date.now() - timerStartTime;
+                    timerStoppedOnClue = cluesRevealed - 1;
+                }
+                clearInterval(timerInterval);
+                timerInterval = null;
+                timerStopped = true;
+                syncGameState();
+                render();
+            }
+        }
+
+        function resetTimer() {
+            if (timerInterval) clearInterval(timerInterval);
+            timerInterval = null;
+            timerStartTime = null;
+            timerStopped = false;
+            timerElapsedWhenStopped = 0;
+            timerStoppedOnClue = null;
+        }
+
+        // Keyboard event listener for spacebar (players only)
+        document.addEventListener('keydown', function(event) {
+            if (event.code === 'Space' && isPlayer()) {
+                if ((view === 'clues' && cluesRevealed > 0 && !timerStopped) ||
+                    (view === 'vowels' && vowelsCategoryRevealed && vowelsClueRevealed && !timerStopped)) {
+                    event.preventDefault();
+                    socket.emit('buzzIn');
+                    // Visual feedback for player
+                    const container = document.getElementById('gameContainer');
+                    if (container) {
+                        const flash = document.createElement('div');
+                        flash.style.cssText = 'position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(59, 130, 246, 0.8); color: white; padding: 2rem 4rem; border-radius: 1rem; font-size: 2rem; font-weight: bold; z-index: 9999;';
+                        flash.textContent = 'BUZZED!';
+                        container.appendChild(flash);
+                        setTimeout(() => flash.remove(), 1000);
+                    }
+                }
+            }
+        });
+
+        // Game functions with role restrictions
+        function selectRound(roundIndex) {
+            if (!isHost()) return;
+            
+            currentRound = roundIndex;
+            
+            if (roundIndex === 2) {
+                initializeWall();
+                view = 'wall';
+            } else if (roundIndex === 3) {
+                initializeVowels();
+                view = 'vowels';
+            } else {
+                view = 'questions';
+            }
+            
+            broadcastAction('selectRound', [roundIndex]);
+            syncGameState();
+            render();
+        }
+
+        function selectQuestion(questionIndex) {
+            if (!isHost()) return;
+            
+            const questionKey = `r${currentRound}q${questionIndex}`;
+            if (completedQuestions.includes(questionKey)) return;
+            
+            currentQuestion = questionIndex;
+            cluesRevealed = 0;
+            answerRevealed = false;
+            timerStopped = false;
+            timerStoppedOnClue = null;
+            resetTimer();
+            timerDuration = 60000;
+            view = 'clues';
+            
+            broadcastAction('selectQuestion', [questionIndex]);
+            syncGameState();
+            render();
+        }
+
+        function revealClue(index) {
+            if (!isHost()) return;
+            
+            const isSequence = currentRound === 1;
+            
+            if (index === cluesRevealed) {
+                if (isSequence && index === 3 && !timerStopped) {
+                    return;
+                }
+                
+                cluesRevealed++;
+                
+                if (!timerStopped && cluesRevealed < 4) {
+                    startTimer();
+                }
+                
+                broadcastAction('revealClue', [index]);
+                syncGameState();
+                render();
+            }
+        }
+
+        function markCorrect() {
+            if (!isHost()) return;
+            
+            const isSequence = currentRound === 1;
+            const question = isSequence ? gameData.round2[currentQuestion] : gameData.round1[currentQuestion];
+            const pointsValues = question.points;
+            const pointsEarned = pointsValues[timerStoppedOnClue];
+            score += pointsEarned;
+            answerRevealed = true;
+            
+            broadcastAction('markCorrect');
+            syncGameState();
+            render();
+        }
+
+        function markIncorrect() {
+            if (!isHost()) return;
+            
+            answerRevealed = true;
+            
+            broadcastAction('markIncorrect');
+            syncGameState();
+            render();
+        }
+
+        function completeQuestion() {
+            if (!isHost()) return;
+            
+            const questionKey = `r${currentRound}q${currentQuestion}`;
+            if (!completedQuestions.includes(questionKey)) {
+                completedQuestions.push(questionKey);
+            }
+            
+            broadcastAction('completeQuestion');
+            backToQuestions();
+        }
+
+        function backToRounds() {
+            if (!isHost()) return;
+            
+            view = 'rounds';
+            currentRound = null;
+            currentQuestion = null;
+            resetTimer();
+            
+            broadcastAction('backToRounds');
+            syncGameState();
+            render();
+        }
+
+        function backToQuestions() {
+            if (!isHost()) return;
+            
+            view = 'questions';
+            currentQuestion = null;
+            cluesRevealed = 0;
+            answerRevealed = false;
+            timerStopped = false;
+            timerStoppedOnClue = null;
+            resetTimer();
+            
+            broadcastAction('backToQuestions');
+            syncGameState();
+            render();
+        }
+
+        function endGame() {
+            if (!isHost()) return;
+            
+            view = 'finalScore';
+            
+            broadcastAction('endGame');
+            syncGameState();
+            render();
+        }
+
+        function endSession() {
+            if (!isHost()) return;
+            
+            location.reload();
+        }
+
+        // Round 4 (Missing Vowels) functions
+        function initializeVowels() {
+            vowelsCurrentCategory = 0;
+            vowelsCurrentClue = 0;
+            vowelsCategoryRevealed = false;
+            vowelsCategoryAnimating = false;
+            vowelsClueRevealed = false;
+            vowelsAnswerRevealed = false;
+            vowelsShowTimeUpModal = false;
+            resetTimer();
+            timerDuration = 120000;
+        }
+
+        function revealCategoryAndStartTimer() {
+            if (!isHost()) return;
+            
+            if (!vowelsCategoryRevealed) {
+                vowelsCategoryRevealed = true;
+                vowelsCategoryAnimating = true;
+                
+                syncGameState();
+                render();
+                
+                setTimeout(() => {
+                    vowelsCategoryAnimating = false;
+                    vowelsClueRevealed = true;
+                    startTimer();
+                    
+                    broadcastAction('revealCategoryAndStartTimer');
+                    syncGameState();
+                    render();
+                }, 3000);
+            }
+        }
+
+        function markVowelsCorrect() {
+            if (!isHost()) return;
+            
+            score += 1;
+            vowelsAnswerRevealed = true;
+            
+            setTimeout(() => {
+                const clueElement = document.querySelector('.vowels-clue-text');
+                if (clueElement) {
+                    const letters = clueElement.querySelectorAll('.vowels-letter');
+                    letters.forEach(letter => {
+                        if (letter.classList.contains('vowel')) {
+                            letter.classList.add('revealed');
+                        }
+                    });
+                }
+            }, 50);
+            
+            broadcastAction('markVowelsCorrect');
+            syncGameState();
+            render();
+        }
+
+        function markVowelsIncorrect() {
+            if (!isHost()) return;
+            
+            vowelsAnswerRevealed = true;
+            
+            setTimeout(() => {
+                const clueElement = document.querySelector('.vowels-clue-text');
+                if (clueElement) {
+                    const letters = clueElement.querySelectorAll('.vowels-letter');
+                    letters.forEach(letter => {
+                        if (letter.classList.contains('vowel')) {
+                            letter.classList.add('revealed');
+                        }
+                    });
+                }
+            }, 50);
+            
+            broadcastAction('markVowelsIncorrect');
+            syncGameState();
+            render();
+        }
+
+        function nextVowelsClue() {
+            if (!isHost()) return;
+            
+            const category = gameData.round4[vowelsCurrentCategory];
+            
+            if (vowelsCurrentClue < category.clues.length - 1) {
+                vowelsCurrentClue++;
+                vowelsClueRevealed = true;
+                vowelsAnswerRevealed = false;
+                timerStopped = false;
+                
+                if (timerStartTime !== null) {
+                    timerStartTime = Date.now() - timerElapsedWhenStopped;
+                    timerInterval = setInterval(updateTimer, 100);
+                    timerStopped = false;
+                }
+                
+                broadcastAction('nextVowelsClue');
+                syncGameState();
+                render();
+            } else {
+                stopTimer();
+                vowelsClueRevealed = false;
+                vowelsAnswerRevealed = false;
+                
+                syncGameState();
+                render();
+            }
+        }
+
+        function nextVowelsCategory() {
+            if (!isHost()) return;
+            
+            const category = gameData.round4[vowelsCurrentCategory];
+            if (vowelsCurrentClue !== category.clues.length - 1 || !vowelsAnswerRevealed) {
+                return;
+            }
+            
+            if (vowelsCurrentCategory < gameData.round4.length - 1) {
+                vowelsCurrentCategory++;
+                vowelsCurrentClue = 0;
+                vowelsCategoryRevealed = true;
+                vowelsCategoryAnimating = true;
+                vowelsClueRevealed = false;
+                vowelsAnswerRevealed = false;
+                
+                syncGameState();
+                render();
+                
+                setTimeout(() => {
+                    vowelsCategoryAnimating = false;
+                    vowelsClueRevealed = true;
+                    
+                    if (timerStartTime !== null && timerStopped) {
+                        timerStartTime = Date.now() - timerElapsedWhenStopped;
+                        timerInterval = setInterval(updateTimer, 100);
+                        timerStopped = false;
+                    }
+                    
+                    broadcastAction('nextVowelsCategory');
+                    syncGameState();
+                    render();
+                }, 3000);
+            }
+        }
+
+        function revealVowelsAnswerFromModal() {
+            if (!isHost()) return;
+            
+            vowelsShowTimeUpModal = false;
+            vowelsAnswerRevealed = true;
+            
+            setTimeout(() => {
+                const clueElement = document.querySelector('.vowels-clue-text');
+                if (clueElement) {
+                    const letters = clueElement.querySelectorAll('.vowels-letter');
+                    letters.forEach(letter => {
+                        if (letter.classList.contains('vowel')) {
+                            letter.classList.add('revealed');
+                        }
+                    });
+                }
+            }, 50);
+            
+            broadcastAction('revealVowelsAnswerFromModal');
+            syncGameState();
+            render();
+        }
+
+        function isVowel(char) {
+            return 'AEIOU'.includes(char.toUpperCase());
+        }
+
+        function createAnimatedClueText(withoutVowels, fullAnswer, revealed) {
+            const answerChars = fullAnswer.split('');
+            
+            let html = '<div class="vowels-clue-text">';
+            
+            for (let i = 0; i < answerChars.length; i++) {
+                const char = answerChars[i];
+                
+                if (char === ' ') {
+                    html += '<span class="vowels-letter" style="width: 1em;"> </span>';
+                } else if (isVowel(char)) {
+                    const vowelClass = revealed ? 'vowels-letter vowel revealed' : 'vowels-letter vowel';
+                    html += `<span class="${vowelClass}">${char}</span>`;
+                } else {
+                    html += `<span class="vowels-letter">${char}</span>`;
+                }
+            }
+            
+            html += '</div>';
+            return html;
+        }
+
+        // Round 3 (Connecting Wall) functions
+        function initializeWall() {
+            const wallData = gameData.round3[0];
+            
+            let allItems = [];
+            wallData.groups.forEach((group, groupIndex) => {
+                group.items.forEach(item => {
+                    allItems.push({ text: item, groupIndex: groupIndex });
+                });
+            });
+            
+            wallTiles = shuffleArray(allItems);
+            selectedTiles = [];
+            solvedGroups = [];
+            wallLives = 3;
+            wallLocked = false;
+            wallPhase = 'solving';
+            connectionGuesses = [];
+            wallTimerReady = false;
+            
+            resetTimer();
+            timerDuration = 180000;
+        }
+
+        function startWallTimer() {
+            if (!isHost()) return;
+            
+            if (!wallTimerReady) {
+                wallTimerReady = true;
+                startTimer();
+                
+                broadcastAction('startWallTimer');
+                syncGameState();
+                render();
+            }
+        }
+
+        function toggleTile(index) {
+            // Players can click during solving phase, host during guessing phase
+            const canInteract = (isPlayer() && wallPhase === 'solving' && wallTimerReady) || 
+                               (isHost() && wallPhase === 'guessing');
+            
+            if (!canInteract) return;
+            if (wallPhase !== 'solving') return;
+            if (timerStopped) return;
+            
+            const tile = wallTiles[index];
+            if (tile.solved) return;
+            
+            const selectedIndex = selectedTiles.indexOf(index);
+            
+            if (selectedIndex > -1) {
+                selectedTiles.splice(selectedIndex, 1);
+            } else {
+                if (selectedTiles.length < 4) {
+                    selectedTiles.push(index);
+                    
+                    if (selectedTiles.length === 4) {
+                        setTimeout(() => {
+                            if (isPlayer()) {
+                                // Player sends action to host
+                                socket.emit('playerWallAction', { type: 'checkGroup' });
+                            } else {
+                                checkGroup();
+                            }
+                        }, 300);
+                    }
+                }
+            }
+            
+            syncGameState();
+            render();
+        }
+
+        function checkGroup() {
+            if (!isHost()) return;
+            
+            if (selectedTiles.length !== 4) return;
+            
+            const selectedGroupIndices = selectedTiles.map(i => wallTiles[i].groupIndex);
+            const firstGroup = selectedGroupIndices[0];
+            const allSame = selectedGroupIndices.every(g => g === firstGroup);
+            
+            if (allSame) {
+                const wallData = gameData.round3[0];
+                const groupItems = selectedTiles.map(i => wallTiles[i].text).sort();
+                
+                selectedTiles.forEach(i => {
+                    wallTiles[i].solved = true;
+                    wallTiles[i].solvedGroupIndex = solvedGroups.length;
+                });
+                
+                solvedGroups.push({
+                    items: groupItems,
+                    connection: wallData.groups[firstGroup].connection,
+                    groupIndex: firstGroup,
+                    solvedGroupIndex: solvedGroups.length
+                });
+                
+                selectedTiles = [];
+                score += 1;
+                
+                if (solvedGroups.length === 3) {
+                    setTimeout(() => {
+                        autoSolveLastGroup();
+                        setTimeout(() => {
+                            endWallSolving();
+                        }, 1000);
+                    }, 800);
+                } else if (solvedGroups.length === 4) {
+                    setTimeout(() => {
+                        endWallSolving();
+                    }, 1000);
+                }
+            } else {
+                const remainingGroups = 4 - solvedGroups.length;
+                selectedTiles = [];
+                
+                if (remainingGroups === 2) {
+                    wallLives--;
+                    
+                    if (wallLives === 0) {
+                        if (timerInterval) {
+                            clearInterval(timerInterval);
+                            timerInterval = null;
+                            timerStopped = true;
+                        }
+                        showWallFrozenModal = true;
+                    }
+                }
+            }
+            
+            broadcastAction('checkGroup');
+            syncGameState();
+            render();
+        }
+
+        function autoSolveLastGroup() {
+            const wallData = gameData.round3[0];
+            
+            for (let groupIndex = 0; groupIndex < 4; groupIndex++) {
+                const alreadySolved = solvedGroups.some(g => g.groupIndex === groupIndex);
+                
+                if (!alreadySolved) {
+                    const groupTiles = [];
+                    
+                    wallTiles.forEach((tile, index) => {
+                        if (tile.groupIndex === groupIndex && !tile.solved) {
+                            tile.solved = true;
+                            tile.solvedGroupIndex = solvedGroups.length;
+                            groupTiles.push(tile.text);
+                        }
+                    });
+                    
+                    if (groupTiles.length > 0) {
+                        solvedGroups.push({
+                            items: groupTiles.sort(),
+                            connection: wallData.groups[groupIndex].connection,
+                            groupIndex: groupIndex,
+                            solvedGroupIndex: solvedGroups.length
+                        });
+                        
+                        score += 1;
+                    }
+                    break;
+                }
+            }
+        }
+
+        function endWallSolving() {
+            wallPhase = 'guessing';
+            syncGameState();
+            render();
+        }
+
+        function autoSolveRemainingGroups() {
+            const wallData = gameData.round3[0];
+            
+            for (let groupIndex = 0; groupIndex < 4; groupIndex++) {
+                const alreadySolved = solvedGroups.some(g => g.groupIndex === groupIndex);
+                
+                if (!alreadySolved) {
+                    const groupTiles = [];
+                    
+                    wallTiles.forEach((tile, index) => {
+                        if (tile.groupIndex === groupIndex && !tile.solved) {
+                            tile.solved = true;
+                            tile.solvedGroupIndex = solvedGroups.length;
+                            groupTiles.push(tile.text);
+                        }
+                    });
+                    
+                    if (groupTiles.length > 0) {
+                        solvedGroups.push({
+                            items: groupTiles.sort(),
+                            connection: wallData.groups[groupIndex].connection,
+                            groupIndex: groupIndex,
+                            solvedGroupIndex: solvedGroups.length,
+                            autoSolved: true
+                        });
+                    }
+                }
+            }
+        }
+
+        function resolveWallAfterTimeout() {
+            if (!isHost()) return;
+            
+            showTimeUpModal = false;
+            autoSolveRemainingGroups();
+            
+            setTimeout(() => {
+                wallPhase = 'guessing';
+                broadcastAction('resolveWallAfterTimeout');
+                syncGameState();
+                render();
+            }, 1000);
+        }
+
+        function resolveWallAfterFrozen() {
+            if (!isHost()) return;
+            
+            showWallFrozenModal = false;
+            autoSolveRemainingGroups();
+            
+            setTimeout(() => {
+                wallPhase = 'guessing';
+                broadcastAction('resolveWallAfterFrozen');
+                syncGameState();
+                render();
+            }, 1000);
+        }
+
+        function guessConnection(groupIndex, correct) {
+            if (!isHost()) return;
+            
+            if (correct) {
+                score += 1;
+            }
+            
+            connectionGuesses.forEach(guess => {
+                if (guess && guess.justRevealed) {
+                    guess.justRevealed = false;
+                }
+            });
+            
+            connectionGuesses[groupIndex] = {
+                correct: correct,
+                revealed: true,
+                justRevealed: true
+            };
+            
+            const allGuessed = solvedGroups.every((_, idx) => connectionGuesses[idx]);
+            
+            if (allGuessed) {
+                const allFoundInTime = solvedGroups.every(g => !g.autoSolved);
+                const allGuessedCorrect = connectionGuesses.every(g => g.correct);
+                
+                if (allFoundInTime && allGuessedCorrect) {
+                    score += 2;
+                }
+            }
+            
+            broadcastAction('guessConnection', [groupIndex, correct]);
+            syncGameState();
+            render();
+            
+            setTimeout(() => {
+                if (connectionGuesses[groupIndex]) {
+                    connectionGuesses[groupIndex].justRevealed = false;
+                }
+            }, 1000);
+        }
+
+        function shuffleArray(array) {
+            const shuffled = [...array];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            return shuffled;
+        }
+
+        // Render functions
+        function renderSetupModal() {
+            if (!showSetupModal) return '';
+            
+            if (setupStep === 'initial') {
+                return `
+                    <div class="setup-modal">
+                        <div class="setup-modal-content">
+                            <div class="setup-modal-title">Only Connect</div>
+                            <button class="setup-btn" onclick="showCreateGame()">New Game (Host)</button>
+                            <button class="setup-btn" onclick="showJoinGame()">Join Game (Player)</button>
+                        </div>
+                    </div>
+                `;
+            } else if (setupStep === 'createGame') {
+                return `
+                    <div class="setup-modal">
+                        <div class="setup-modal-content">
+                            <div class="setup-modal-title">Create Game</div>
+                            <input type="text" 
+                                   id="gameCodeInput" 
+                                   class="setup-input" 
+                                   placeholder="Enter game code (e.g., Veto2)" 
+                                   onkeypress="if(event.key === 'Enter') createGame()">
+                            <button class="setup-btn" onclick="createGame()">Create Game</button>
+                            <button class="setup-btn" onclick="setupStep = 'initial'; render();" style="background: rgba(255, 255, 255, 0.15);">Back</button>
+                            <div class="error-message" id="errorMessage"></div>
+                        </div>
+                    </div>
+                `;
+            } else if (setupStep === 'joinGame') {
+                return `
+                    <div class="setup-modal">
+                        <div class="setup-modal-content">
+                            <div class="setup-modal-title">Join Game</div>
+                            <input type="text" 
+                                   id="joinCodeInput" 
+                                   class="setup-input" 
+                                   placeholder="Enter game code" 
+                                   onkeypress="if(event.key === 'Enter') proceedToName()">
+                            <button class="setup-btn" onclick="proceedToName()">Next</button>
+                            <button class="setup-btn" onclick="setupStep = 'initial'; render();" style="background: rgba(255, 255, 255, 0.15);">Back</button>
+                            <div class="error-message" id="errorMessage"></div>
+                        </div>
+                    </div>
+                `;
+            } else if (setupStep === 'enterName') {
+                return `
+                    <div class="setup-modal">
+                        <div class="setup-modal-content">
+                            <div class="setup-modal-title">Enter Your Name</div>
+                            <input type="text" 
+                                   id="playerNameInput" 
+                                   class="setup-input" 
+                                   placeholder="Your name" 
+                                   onkeypress="if(event.key === 'Enter') joinGame()">
+                            <button class="setup-btn" onclick="joinGame()">Join Game</button>
+                            <button class="setup-btn" onclick="setupStep = 'joinGame'; render();" style="background: rgba(255, 255, 255, 0.15);">Back</button>
+                            <div class="error-message" id="errorMessage"></div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function showCreateGame() {
+            setupStep = 'createGame';
+            render();
+            setTimeout(() => {
+                const input = document.getElementById('gameCodeInput');
+                if (input) input.focus();
+            }, 100);
+        }
+
+        function showJoinGame() {
+            setupStep = 'joinGame';
+            render();
+            setTimeout(() => {
+                const input = document.getElementById('joinCodeInput');
+                if (input) input.focus();
+            }, 100);
+        }
+
+        function createGame() {
+            const input = document.getElementById('gameCodeInput');
+            const code = input ? input.value.trim() : '';
+            
+            if (!code) {
+                const errorMsg = document.getElementById('errorMessage');
+                if (errorMsg) errorMsg.textContent = 'Please enter a game code';
+                return;
+            }
+            
+            socket.emit('createGame', code);
+        }
+
+        function proceedToName() {
+            const input = document.getElementById('joinCodeInput');
+            const code = input ? input.value.trim() : '';
+            
+            if (!code) {
+                const errorMsg = document.getElementById('errorMessage');
+                if (errorMsg) errorMsg.textContent = 'Please enter a game code';
+                return;
+            }
+            
+            gameCode = code;
+            setupStep = 'enterName';
+            render();
+            
+            setTimeout(() => {
+                const nameInput = document.getElementById('playerNameInput');
+                if (nameInput) nameInput.focus();
+            }, 100);
+        }
+
+        function joinGame() {
+            const input = document.getElementById('playerNameInput');
+            const name = input ? input.value.trim() : '';
+            
+            if (!name) {
+                const errorMsg = document.getElementById('errorMessage');
+                if (errorMsg) errorMsg.textContent = 'Please enter your name';
+                return;
+            }
+            
+            socket.emit('joinGame', { gameCode, playerName: name });
+        }
+
+        function renderRoundSelector() {
+            return `
+                <div class="round-selector">
+                    <button class="round-btn ${!isHost() ? 'disabled' : ''}" onclick="selectRound(0)">
+                        <div class="round-title">Round 1</div>
+                        <div>Connections</div>
+                    </button>
+                    <button class="round-btn ${!isHost() ? 'disabled' : ''}" onclick="selectRound(1)">
+                        <div class="round-title">Round 2</div>
+                        <div>Sequences</div>
+                    </button>
+                    <button class="round-btn ${!isHost() ? 'disabled' : ''}" onclick="selectRound(2)">
+                        <div class="round-title">Round 3</div>
+                        <div>Connecting Wall</div>
+                    </button>
+                    <button class="round-btn ${!isHost() ? 'disabled' : ''}" onclick="selectRound(3)">
+                        <div class="round-title">Round 4</div>
+                        <div>Missing Vowels</div>
+                    </button>
+                </div>
+            `;
+        }
+
+        function renderQuestionSelector() {
+            const questions = currentRound === 0 ? gameData.round1 : gameData.round2;
+            let html = `<button class="back-btn ${!isHost() ? 'disabled' : ''}" onclick="backToRounds()">← Back to Rounds</button>`;
+            html += '<div class="question-grid">';
+            for (let i = 0; i < questions.length; i++) {
+                const questionKey = `r${currentRound}q${i}`;
+                const completed = completedQuestions.includes(questionKey);
+                const disabled = !isHost() ? 'disabled' : '';
+                html += `<button class="question-btn ${completed ? 'completed' : ''} ${disabled}" onclick="selectQuestion(${i})">Q${i + 1}</button>`;
+            }
+            html += '</div>';
+            return html;
+        }
+
+        function renderClues() {
+            const isSequence = currentRound === 1;
+            const question = isSequence ? gameData.round2[currentQuestion] : gameData.round1[currentQuestion];
+            const pointsValues = question.points;
+            
+            let html = '';
+            const hideButton = cluesRevealed > 0 ? ' style="visibility: hidden;"' : '';
+            html += `<button class="back-btn ${!isHost() ? 'disabled' : ''}" onclick="backToQuestions()"${hideButton}>← Back to Questions</button>`;
+            html += '<div class="clue-container"><div class="clue-grid">';
+            
+            for (let i = 0; i < 4; i++) {
+                html += '<div class="clue-wrapper">';
+                
+                let showTimerOnThisClue;
+                if (timerStopped && timerStoppedOnClue !== null) {
+                    showTimerOnThisClue = (i === timerStoppedOnClue);
+                } else {
+                    showTimerOnThisClue = isSequence ? (i === cluesRevealed - 1 && cluesRevealed > 0 && i < 3) : (i === cluesRevealed - 1 && cluesRevealed > 0);
+                }
+                
+                if (showTimerOnThisClue) {
+                    html += `<div class="points-label">${pointsValues[i]} Point${pointsValues[i] !== 1 ? 's' : ''}</div>`;
+                    html += `<div class="timer-bar-container"><div id="timerBar" class="timer-bar" style="width: 100%;"></div><div id="timerText" class="timer-text">60s</div></div>`;
+                } else {
+                    html += '<div class="timer-spacer"></div>';
+                }
+                
+                const revealed = i < cluesRevealed;
+                const canReveal = isSequence ? (i < 3 || timerStopped) : true;
+                const clueText = revealed ? question.clues[i] : '';
+                const classes = 'clue-btn' + (revealed ? ' revealed' : '') + (!isHost() ? ' disabled' : '');
+                const onclick = (i === cluesRevealed && canReveal && isHost()) ? `onclick="revealClue(${i})"` : '';
+                
+                html += `<button class="${classes}" ${onclick}>${clueText}</button>`;
+                html += '</div>';
+            }
+            html += '</div>';
+            
+            const answerText = isSequence ? question.answer : question.connection;
+            const subtitle = isSequence ? question.sequence : '';
+            html += '<div class="answer-box">';
+            if (answerRevealed) {
+                if (isSequence) {
+                    html += `<div style="font-size: 1.25rem; font-weight: bold;">${subtitle}</div>`;
+                } else {
+                    html += `<div><div style="font-size: 0.875rem; margin-bottom: 0.5rem;">Connection:</div>`;
+                    html += `<div style="font-size: 1.25rem; font-weight: bold;">${answerText}</div>`;
+                    html += '</div>';
+                }
+            }
+            html += '</div>';
+            html += '</div>';
+            
+            html += '<div class="buttons-container">';
+            if (timerStopped && !answerRevealed) {
+                html += '<div class="button-row">';
+                html += `<button class="btn btn-correct ${!isHost() ? 'disabled' : ''}" onclick="markCorrect()">Correct</button>`;
+                html += `<button class="btn btn-incorrect ${!isHost() ? 'disabled' : ''}" onclick="markIncorrect()">Incorrect</button>`;
+                html += '</div>';
+            }
+            if (answerRevealed) {
+                html += `<button class="btn btn-primary ${!isHost() ? 'disabled' : ''}" onclick="completeQuestion()">Continue</button>`;
+            }
+            html += '</div>';
+            
+            return html;
+        }
+
+        function renderWall() {
+            const remainingGroups = 4 - solvedGroups.length;
+            const showLives = remainingGroups === 2 && wallPhase === 'solving' && wallTimerReady;
+            
+            let html = '<div class="wall-header">';
+            const hideButton = wallTimerReady ? ' style="visibility: hidden;"' : '';
+            html += `<button class="back-btn ${!isHost() ? 'disabled' : ''}" onclick="backToRounds()"${hideButton}>← Back to Rounds</button>`;
+            if (showLives) {
+                html += `<div class="lives-display">Lives: ${'❤️'.repeat(wallLives)}${'🖤'.repeat(3 - wallLives)}</div>`;
+            }
+            html += '</div>';
+            
+            html += '<div class="wall-grid" style="position: relative; min-height: 440px;">';
+            
+            let positionIndex = 0;
+            const tilePositions = new Map();
+            
+            solvedGroups.forEach((group, groupIdx) => {
+                group.items.forEach(itemText => {
+                    const tileIndex = wallTiles.findIndex(t => t.text === itemText && t.solvedGroupIndex === groupIdx);
+                    if (tileIndex !== -1) {
+                        tilePositions.set(tileIndex, positionIndex);
+                        positionIndex++;
+                    }
+                });
+            });
+            
+            wallTiles.forEach((tile, index) => {
+                if (!tile.solved) {
+                    tilePositions.set(index, positionIndex);
+                    positionIndex++;
+                }
+            });
+            
+            wallTiles.forEach((tile, index) => {
+                const pos = tilePositions.get(index);
+                const row = Math.floor(pos / 4);
+                const col = pos % 4;
+                
+                const tileWidth = 'calc((100% - 2.25rem) / 4)';
+                const gapSize = 0.75;
+                const topPx = row * 100 + row * 12;
+                const leftCalc = `calc(${col} * ((100% - 2.25rem) / 4 + ${gapSize}rem))`;
+                
+                let classes = 'wall-tile';
+                const isSelected = selectedTiles.includes(index);
+                
+                const hasOverlay = tile.solved && wallPhase === 'guessing' && 
+                                   connectionGuesses[tile.solvedGroupIndex] && 
+                                   connectionGuesses[tile.solvedGroupIndex].revealed;
+                if (hasOverlay) {
+                    classes += ' text-up';
+                }
+                
+                if (!wallTimerReady) {
+                    classes += ' hidden-text';
+                }
+                
+                if (tile.solved) {
+                    classes += ' solved group-' + tile.solvedGroupIndex;
+                } else if (isSelected) {
+                    classes += ' selected';
+                } else if (wallPhase !== 'solving') {
+                    classes += ' locked';
+                }
+                
+                // Players can click during solving, host during guessing
+                const canClick = (isPlayer() && wallPhase === 'solving' && wallTimerReady && !tile.solved) ||
+                                (isHost() && wallPhase === 'solving' && wallTimerReady && !tile.solved);
+                
+                if (!canClick) {
+                    classes += ' disabled';
+                }
+                
+                const onclick = canClick ? `onclick="toggleTile(${index})"` : '';
+                const style = `top: ${topPx}px; left: ${leftCalc}; width: ${tileWidth};`;
+                
+                html += `<button class="${classes}" ${onclick} style="${style}" data-tile-id="${index}">${tile.text}</button>`;
+            });
+            
+            if (wallPhase === 'guessing') {
+                solvedGroups.forEach((group, idx) => {
+                    const row = idx;
+                    const topPx = row * 100 + row * 12;
+                    
+                    if (connectionGuesses[idx] && connectionGuesses[idx].revealed) {
+                        const overlayTop = topPx + 50;
+                        const fadeInClass = connectionGuesses[idx].justRevealed ? ' fade-in' : '';
+                        const displayStyle = connectionGuesses[idx].justRevealed ? '' : ' opacity: 1;';
+                        html += `<div class="connection-display${fadeInClass}" style="top: ${overlayTop}px;${displayStyle}">${group.connection}</div>`;
+                    }
+                    
+                    if (!connectionGuesses[idx]) {
+                        const buttonsTop = topPx + 27;
+                        html += `<div style="position: absolute; right: -120px; top: ${buttonsTop}px; display: flex; gap: 0.5rem;">`;
+                        html += `<button class="guess-btn correct ${!isHost() ? 'disabled' : ''}" onclick="guessConnection(${idx}, true)">✓</button>`;
+                        html += `<button class="guess-btn incorrect ${!isHost() ? 'disabled' : ''}" onclick="guessConnection(${idx}, false)">✗</button>`;
+                        html += '</div>';
+                    }
+                });
+            }
+            
+            html += '</div>';
+            
+            if (wallPhase === 'solving') {
+                html += '<div class="wall-timer-container">';
+                if (!wallTimerReady) {
+                    html += '<div style="text-align: center; padding: 1rem;">';
+                    html += `<button class="btn btn-primary ${!isHost() ? 'disabled' : ''}" onclick="startWallTimer()" style="font-size: 1.25rem; padding: 1rem 2rem;">Start Timer</button>`;
+                    html += '</div>';
+                } else {
+                    html += '<div class="timer-bar-container"><div id="timerBar" class="timer-bar" style="width: 100%;"></div><div id="timerText" class="timer-text">180s</div></div>';
+                }
+                html += '</div>';
+            }
+            
+            if (wallPhase === 'guessing') {
+                const allGuessed = solvedGroups.every((_, idx) => connectionGuesses[idx]);
+                if (allGuessed) {
+                    html += '<div style="margin-top: 1.5rem; text-align: center;">';
+                    html += `<button class="btn btn-primary ${!isHost() ? 'disabled' : ''}" onclick="backToRounds()">Continue</button>`;
+                    html += '</div>';
+                }
+            }
+            
+            if (showTimeUpModal) {
+                html += '<div class="time-up-modal">';
+                html += '<div class="time-up-content">';
+                html += '<div class="time-up-title">Time is Up</div>';
+                html += `<button class="btn btn-primary ${!isHost() ? 'disabled' : ''}" onclick="resolveWallAfterTimeout()" style="font-size: 1.25rem; padding: 1rem 2rem;">Resolve the Wall</button>`;
+                html += '</div>';
+                html += '</div>';
+            }
+            
+            if (showWallFrozenModal) {
+                html += '<div class="wall-frozen-modal">';
+                html += '<div class="wall-frozen-content">';
+                html += '<div class="wall-frozen-title">The Wall has frozen!</div>';
+                html += `<button class="btn btn-primary ${!isHost() ? 'disabled' : ''}" onclick="resolveWallAfterFrozen()" style="font-size: 1.25rem; padding: 1rem 2rem;">Resolve the Wall</button>`;
+                html += '</div>';
+                html += '</div>';
+            }
+            
+            return html;
+        }
+
+        function renderVowels() {
+            const category = gameData.round4[vowelsCurrentCategory];
+            const clue = category.clues[vowelsCurrentClue];
+            
+            let html = '';
+            const hideButton = vowelsCategoryRevealed ? ' style="visibility: hidden;"' : '';
+            html += `<button class="back-btn ${!isHost() ? 'disabled' : ''}" onclick="backToRounds()"${hideButton}>← Back to Rounds</button>`;
+            
+            html += '<div class="timer-bar-container"><div id="timerBar" class="timer-bar" style="width: 100%;"></div><div id="timerText" class="timer-text">120s</div></div>';
+            
+            const allCluesComplete = vowelsCurrentClue === category.clues.length - 1 && vowelsAnswerRevealed;
+            const canAdvanceCategory = allCluesComplete && vowelsCurrentCategory < gameData.round4.length - 1;
+            const categoryDisabled = vowelsCategoryAnimating || (!canAdvanceCategory && vowelsCategoryRevealed) || !isHost();
+            const categoryClasses = 'vowels-category-box' + (categoryDisabled ? ' disabled' : '');
+            const categoryOnclick = !vowelsCategoryRevealed && isHost() ? ' onclick="revealCategoryAndStartTimer()"' : (canAdvanceCategory && !vowelsCategoryAnimating && isHost() ? ' onclick="nextVowelsCategory()"' : '');
+            const categoryText = vowelsCategoryRevealed ? category.category : '';
+            html += `<div class="${categoryClasses}"${categoryOnclick}>${categoryText}</div>`;
+            
+            html += '<div class="vowels-clue-box">';
+            if (vowelsClueRevealed) {
+                if (vowelsAnswerRevealed) {
+                    html += createAnimatedClueText(clue.withoutVowels, clue.answer, true);
+                } else {
+                    html += `<div class="vowels-clue-text">${clue.withoutVowels}</div>`;
+                }
+            }
+            html += '</div>';
+            
+            html += '<div class="buttons-container">';
+            if (timerStopped && !vowelsAnswerRevealed && vowelsCategoryRevealed && !vowelsCategoryAnimating) {
+                html += '<div class="button-row">';
+                html += `<button class="btn btn-correct ${!isHost() ? 'disabled' : ''}" onclick="markVowelsCorrect()">Correct</button>`;
+                html += `<button class="btn btn-incorrect ${!isHost() ? 'disabled' : ''}" onclick="markVowelsIncorrect()">Incorrect</button>`;
+                html += '</div>';
+            } else if (vowelsAnswerRevealed) {
+                if (vowelsCurrentClue < category.clues.length - 1) {
+                    html += `<button class="btn btn-primary ${!isHost() ? 'disabled' : ''}" onclick="nextVowelsClue()">Next Clue</button>`;
+                } else if (vowelsCurrentCategory >= gameData.round4.length - 1) {
+                    html += `<button class="btn btn-primary ${!isHost() ? 'disabled' : ''}" onclick="endGame()">End Game</button>`;
+                }
+            }
+            html += '</div>';
+            
+            if (vowelsShowTimeUpModal) {
+                html += '<div class="time-up-modal">';
+                html += '<div class="time-up-content">';
+                html += '<div class="time-up-title">Time is Up</div>';
+                html += `<button class="btn btn-primary ${!isHost() ? 'disabled' : ''}" onclick="revealVowelsAnswerFromModal()" style="font-size: 1.25rem; padding: 1rem 2rem;">Reveal Answer</button>`;
+                html += '</div>';
+                html += '</div>';
+            }
+            
+            return html;
+        }
+
+        function renderFinalScore() {
+            return `
+                <div class="final-score-container">
+                    <div class="final-score-names">${playerNames}</div>
+                    <div class="final-score-box">
+                        <div class="final-score-value">${score}</div>
+                    </div>
+                    <button class="end-session-btn ${!isHost() ? 'disabled' : ''}" onclick="endSession()">End Session</button>
+                </div>
+            `;
+        }
+
+        function render() {
+            const container = document.getElementById('gameContainer');
+            let content = '';
+            
+            if (view === 'rounds') content = renderRoundSelector();
+            else if (view === 'questions') content = renderQuestionSelector();
+            else if (view === 'clues') content = renderClues();
+            else if (view === 'wall') content = renderWall();
+            else if (view === 'vowels') content = renderVowels();
+            else if (view === 'finalScore') content = renderFinalScore();
+            
+            const headerHtml = view === 'finalScore' ? '' : `
+                <div class="header-card">
+                    <h1 class="header-title">${playerNames}</h1>
+                    <div class="score-box">
+                        <div class="score-value">${score}</div>
+                    </div>
+                </div>
+            `;
+            
+            const setupModalHtml = renderSetupModal();
+            
+            container.innerHTML = `
+                <div class="game-container">
+                    ${headerHtml}
+                    ${content}
+                </div>
+                ${setupModalHtml}
+            `;
+            
+            if (view === 'clues' && timerStartTime !== null) updateTimer();
+            if (view === 'wall' && wallPhase === 'solving' && timerStartTime !== null) updateTimer();
+            if (view === 'vowels' && timerStartTime !== null) updateTimer();
+        }
+
+        // Initialize
+        render();
+    </script>
+</body>
+</html>
