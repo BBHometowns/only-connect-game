@@ -41,13 +41,20 @@
             color: white;
         }
 
-        .buzzed-player-display {
-            color: white;
-            font-size: 1.5rem;
-            font-weight: bold;
-            text-align: center;
-            margin-bottom: 1.5rem;
-            padding: 0.75rem;
+        .header-title.has-buzzer {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .buzzed-indicator {
+            display: inline-block;
+            color: #60a5fa;
+            font-size: 1rem;
+            font-weight: 600;
+            padding: 0.5rem 1rem;
+            background: rgba(59, 130, 246, 0.2);
+            border-radius: 0.5rem;
             animation: pulseGlow 1s ease-in-out infinite;
         }
 
@@ -60,6 +67,18 @@
                 opacity: 0.85;
                 text-shadow: 0 0 20px rgba(59, 130, 246, 1);
             }
+        }
+
+        .category-display {
+            color: white;
+            font-size: 1.25rem;
+            font-weight: 600;
+            text-align: center;
+            margin-bottom: 1.5rem;
+            padding: 0.75rem;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(12px);
+            border-radius: 0.5rem;
         }
 
         .score-box {
@@ -1027,6 +1046,9 @@
         // Buzzer state
         let buzzedInPlayer = null;
 
+        // Category display
+        let currentCategoryName = '';
+
         // Socket event listeners
         socket.on('gameCreated', ({ gameCode: code, role }) => {
             gameCode = code;
@@ -1092,6 +1114,7 @@
             vowelsClueRevealed = gameState.vowelsClueRevealed;
             vowelsAnswerRevealed = gameState.vowelsAnswerRevealed;
             vowelsShowTimeUpModal = gameState.vowelsShowTimeUpModal;
+            currentCategoryName = gameState.currentCategoryName || '';
             
             // Start timer on player side if host has timer running
             if (timerStartTime && !timerInterval && !timerStopped) {
@@ -1176,7 +1199,8 @@
                 vowelsClueRevealed,
                 vowelsAnswerRevealed,
                 vowelsShowTimeUpModal,
-                buzzedInPlayer
+                buzzedInPlayer,
+                currentCategoryName
             });
         }
 
@@ -1288,9 +1312,16 @@
             
             currentRound = roundIndex;
             
+            // Reset all modals when switching rounds
+            showCluesTimeUpModal = false;
+            showTimeUpModal = false;
+            showWallFrozenModal = false;
+            vowelsShowTimeUpModal = false;
+            
             if (roundIndex === 2) {
                 initializeWall();
                 view = 'wall';
+                currentCategoryName = "Connecting Wall";
             } else if (roundIndex === 3) {
                 initializeVowels();
                 view = 'vowels';
@@ -1319,6 +1350,13 @@
             resetTimer();
             timerDuration = 60000;
             view = 'clues';
+            
+            // Set category name
+            if (currentRound === 0) {
+                currentCategoryName = "Connections";
+            } else if (currentRound === 1) {
+                currentCategoryName = "Sequences";
+            }
             
             broadcastAction('selectQuestion', [questionIndex]);
             syncGameState();
@@ -1397,6 +1435,12 @@
             }
             
             sequentialQuestionIndex++;
+            
+            // Reset all modals when completing a question
+            showCluesTimeUpModal = false;
+            showTimeUpModal = false;
+            showWallFrozenModal = false;
+            vowelsShowTimeUpModal = false;
             
             // Auto-advance logic
             const questionsInCurrentRound = currentRound === 0 ? gameData.round1.length : gameData.round2.length;
@@ -1487,6 +1531,9 @@
             if (!vowelsCategoryRevealed) {
                 vowelsCategoryRevealed = true;
                 vowelsCategoryAnimating = true;
+                
+                const category = gameData.round4[vowelsCurrentCategory];
+                currentCategoryName = category.category;
                 
                 syncGameState();
                 render();
@@ -1877,28 +1924,46 @@
             if (!isHost()) return;
             
             showTimeUpModal = false;
-            autoSolveRemainingGroups();
             
+            // Sync and render to clear modal first
+            syncGameState();
+            render();
+            
+            // Small delay to allow render, then auto-solve
             setTimeout(() => {
-                wallPhase = 'guessing';
-                broadcastAction('resolveWallAfterTimeout');
-                syncGameState();
-                render();
-            }, 1000);
+                autoSolveRemainingGroups();
+                
+                // Another delay for animations
+                setTimeout(() => {
+                    wallPhase = 'guessing';
+                    broadcastAction('resolveWallAfterTimeout');
+                    syncGameState();
+                    render();
+                }, 1000);
+            }, 100);
         }
 
         function resolveWallAfterFrozen() {
             if (!isHost()) return;
             
             showWallFrozenModal = false;
-            autoSolveRemainingGroups();
             
+            // Sync and render to clear modal first
+            syncGameState();
+            render();
+            
+            // Small delay to allow render, then auto-solve
             setTimeout(() => {
-                wallPhase = 'guessing';
-                broadcastAction('resolveWallAfterFrozen');
-                syncGameState();
-                render();
-            }, 1000);
+                autoSolveRemainingGroups();
+                
+                // Another delay for animations
+                setTimeout(() => {
+                    wallPhase = 'guessing';
+                    broadcastAction('resolveWallAfterFrozen');
+                    syncGameState();
+                    render();
+                }, 1000);
+            }, 100);
         }
 
         function guessConnection(groupIndex, correct) {
@@ -2465,23 +2530,31 @@
             else if (view === 'vowels') content = renderVowels();
             else if (view === 'finalScore') content = renderFinalScore();
             
+            const buzzedIndicator = buzzedInPlayer ? `<span class="buzzed-indicator">${buzzedInPlayer} buzzed!</span>` : '';
+            const headerClass = buzzedInPlayer ? 'header-title has-buzzer' : 'header-title';
+            
             const headerHtml = view === 'finalScore' ? '' : `
                 <div class="header-card">
-                    <h1 class="header-title">${playerNames}</h1>
+                    <h1 class="${headerClass}">
+                        ${playerNames}
+                        ${buzzedIndicator}
+                    </h1>
                     <div class="score-box">
                         <div class="score-value">${score}</div>
                     </div>
                 </div>
             `;
             
-            const buzzedPlayerHtml = buzzedInPlayer ? `<div class="buzzed-player-display">${buzzedInPlayer} buzzed in!</div>` : '';
+            const categoryHtml = currentCategoryName && view !== 'rounds' && view !== 'questions' && view !== 'finalScore' 
+                ? `<div class="category-display">${currentCategoryName}</div>` 
+                : '';
             
             const setupModalHtml = renderSetupModal();
             
             container.innerHTML = `
                 <div class="game-container">
                     ${headerHtml}
-                    ${buzzedPlayerHtml}
+                    ${categoryHtml}
                     ${content}
                 </div>
                 ${setupModalHtml}
