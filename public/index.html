@@ -1325,6 +1325,7 @@
             } else if (roundIndex === 3) {
                 initializeVowels();
                 view = 'vowels';
+                currentCategoryName = "Missing Vowels";
             } else {
                 view = 'questions';
             }
@@ -1442,6 +1443,9 @@
             showWallFrozenModal = false;
             vowelsShowTimeUpModal = false;
             
+            // Broadcast the completion
+            broadcastAction('completeQuestion');
+            
             // Auto-advance logic
             const questionsInCurrentRound = currentRound === 0 ? gameData.round1.length : gameData.round2.length;
             
@@ -1461,8 +1465,6 @@
                     backToRounds();
                 }
             }
-            
-            broadcastAction('completeQuestion');
         }
 
         function backToRounds() {
@@ -1532,8 +1534,7 @@
                 vowelsCategoryRevealed = true;
                 vowelsCategoryAnimating = true;
                 
-                const category = gameData.round4[vowelsCurrentCategory];
-                currentCategoryName = category.category;
+                // Don't change currentCategoryName - keep it as "Missing Vowels"
                 
                 syncGameState();
                 render();
@@ -1605,6 +1606,7 @@
                 vowelsClueRevealed = true;
                 vowelsAnswerRevealed = false;
                 timerStopped = false;
+                buzzedInPlayer = null;  // Clear buzzer for next clue
                 
                 if (timerStartTime !== null) {
                     timerStartTime = Date.now() - timerElapsedWhenStopped;
@@ -1619,6 +1621,7 @@
                 stopTimer();
                 vowelsClueRevealed = false;
                 vowelsAnswerRevealed = false;
+                buzzedInPlayer = null;  // Clear buzzer
                 
                 syncGameState();
                 render();
@@ -1665,19 +1668,12 @@
             if (!isHost()) return;
             
             vowelsShowTimeUpModal = false;
-            vowelsAnswerRevealed = true;
             
-            setTimeout(() => {
-                const clueElement = document.querySelector('.vowels-clue-text');
-                if (clueElement) {
-                    const letters = clueElement.querySelectorAll('.vowels-letter');
-                    letters.forEach(letter => {
-                        if (letter.classList.contains('vowel')) {
-                            letter.classList.add('revealed');
-                        }
-                    });
-                }
-            }, 50);
+            // When time runs out, immediately move to end game state
+            // Don't play through remaining clues
+            vowelsClueRevealed = false;
+            vowelsAnswerRevealed = true;
+            stopTimer();
             
             broadcastAction('revealVowelsAnswerFromModal');
             syncGameState();
@@ -1748,11 +1744,19 @@
         }
 
         function toggleTile(index) {
-            // Players can click during solving phase, host during guessing phase
-            const canInteract = (isPlayer() && wallPhase === 'solving' && wallTimerReady) || 
-                               (isHost() && wallPhase === 'guessing');
+            // During solving phase:
+            // - Players send action to host
+            // - Host processes and broadcasts
+            // - All clients render based on synced state
             
-            if (!canInteract) return;
+            if (isPlayer() && wallPhase === 'solving' && wallTimerReady) {
+                // Player just sends the request to host
+                socket.emit('playerWallAction', { type: 'toggleTile', index: index });
+                return;
+            }
+            
+            // Host processes the tile toggle
+            if (!isHost()) return;
             if (wallPhase !== 'solving') return;
             if (timerStopped) return;
             
@@ -1769,22 +1773,14 @@
                     
                     if (selectedTiles.length === 4) {
                         setTimeout(() => {
-                            if (isPlayer()) {
-                                // Player sends action to host
-                                socket.emit('playerWallAction', { type: 'checkGroup' });
-                            } else {
-                                checkGroup();
-                            }
+                            checkGroup();
                         }, 300);
                     }
                 }
             }
             
-            if (isPlayer()) {
-                // Sync selection state back to host
-                socket.emit('playerWallAction', { type: 'toggleTile', index: index });
-            }
-            
+            // Broadcast to all players
+            broadcastAction('syncWallState');
             syncGameState();
             render();
         }
@@ -2213,7 +2209,14 @@
 
         function renderQuestionSelector() {
             const questions = currentRound === 0 ? gameData.round1 : gameData.round2;
-            let html = `<button class="back-btn ${!isHost() ? 'disabled' : ''}" onclick="backToRounds()">← Back to Rounds</button>`;
+            const roundName = currentRound === 0 ? "Round 1: Connections" : "Round 2: Sequences";
+            
+            let html = `<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">`;
+            html += `<button class="back-btn ${!isHost() ? 'disabled' : ''}" onclick="backToRounds()">← Back to Rounds</button>`;
+            html += `<div style="color: white; font-size: 1.25rem; font-weight: 600;">${roundName}</div>`;
+            html += `<div style="width: 150px;"></div>`; // Spacer for centering
+            html += `</div>`;
+            
             html += '<div class="question-grid">';
             for (let i = 0; i < questions.length; i++) {
                 const questionKey = `r${currentRound}q${i}`;
@@ -2271,9 +2274,7 @@
                 if (isSequence) {
                     html += `<div style="font-size: 1.25rem; font-weight: bold;">${subtitle}</div>`;
                 } else {
-                    html += `<div><div style="font-size: 0.875rem; margin-bottom: 0.5rem;">Connection:</div>`;
                     html += `<div style="font-size: 1.25rem; font-weight: bold;">${answerText}</div>`;
-                    html += '</div>';
                 }
             }
             html += '</div>';
@@ -2487,10 +2488,15 @@
                 html += `<button class="btn btn-incorrect ${!isHost() ? 'disabled' : ''}" onclick="markVowelsIncorrect()">Incorrect</button>`;
                 html += '</div>';
             } else if (vowelsAnswerRevealed) {
-                if (vowelsCurrentClue < category.clues.length - 1) {
-                    html += `<button class="btn btn-primary ${!isHost() ? 'disabled' : ''}" onclick="nextVowelsClue()">Next Clue</button>`;
-                } else if (vowelsCurrentCategory >= gameData.round4.length - 1) {
+                // After timeout OR after completing all clues
+                const timedOut = !vowelsClueRevealed; // If clue not revealed, it was a timeout
+                
+                if (timedOut || vowelsCurrentCategory >= gameData.round4.length - 1) {
+                    // Show End Game if timed out OR on last category
                     html += `<button class="btn btn-primary ${!isHost() ? 'disabled' : ''}" onclick="endGame()">End Game</button>`;
+                } else if (vowelsCurrentClue < category.clues.length - 1) {
+                    // More clues in this category
+                    html += `<button class="btn btn-primary ${!isHost() ? 'disabled' : ''}" onclick="nextVowelsClue()">Next Clue</button>`;
                 }
             }
             html += '</div>';
@@ -2499,7 +2505,7 @@
                 html += '<div class="time-up-modal">';
                 html += '<div class="time-up-content">';
                 html += '<div class="time-up-title">Time is Up</div>';
-                html += `<button class="btn btn-primary ${!isHost() ? 'disabled' : ''}" onclick="revealVowelsAnswerFromModal()" style="font-size: 1.25rem; padding: 1rem 2rem;">Reveal Answer</button>`;
+                html += `<button class="btn btn-primary ${!isHost() ? 'disabled' : ''}" onclick="revealVowelsAnswerFromModal()" style="font-size: 1.25rem; padding: 1rem 2rem;">End Game</button>`;
                 html += '</div>';
                 html += '</div>';
             }
