@@ -3439,6 +3439,8 @@
                     if (typeof clue === 'object' && clue !== null && clue.type === 'image') {
                         clueText = `<img src="${clue.src}" alt="${clue.alt || 'Clue image'}" style="max-width: 90%; max-height: 90%; object-fit: contain;">`;
                     } else if (typeof clue === 'object' && clue !== null && clue.type === 'audio') {
+                        console.log('DEBUG AUDIO: myRole =', myRole, 'isPlayer() =', isPlayer(), 'isHost() =', isHost(), 'isSecondaryHost() =', isSecondaryHost());
+                        
                         const videoId = clue.youtube;
                         const startTime = clue.start || 0;
                         const duration = clue.duration || null;
